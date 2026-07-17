@@ -62,7 +62,7 @@ def reject_player(user_id):
 
 # پایگاه داده کامل کشورها و گروهک‌ها
 GAME_ENTITIES = {
-    "euro_usa": {
+    "europe": {
         "usa": {"name": "🇺🇸 آمریکا", "price": "۲۰۰,۰۰۰ تومان", "vip": True},
         "uk": {"name": "🇬🇧 بریتانیا", "price": "۱۰۰,۰۰۰ تومان", "vip": True},
         "france": {"name": "🇫🇷 فرانسه", "price": "۹۰,۰۰۰ تومان", "vip": True},
@@ -109,7 +109,7 @@ GAME_ENTITIES = {
         "qaeda": {"name": "🏴 القاعده", "price": None, "vip": False},
         "daesh": {"name": "🏴‍☠️ داعش", "price": None, "vip": False},
         "taliban": {"name": "🪖 طالبان", "price": None, "vip": False},
-        "hizb_lebanon": {"name": "💛 حزب‌الله لبنان", "price": None, "vip": False},
+        "hizb_lebanon": {"name": "💛 حزب الله", "price": None, "vip": False},
         "kurdistan": {"name": "☀️ حزب کردستان", "price": None, "vip": False},
     }
 }
@@ -126,7 +126,7 @@ def send_welcome(message):
 
     welcome_text = (
         "🌍 **به بزرگترین شبیه‌ساز جنگ جهانی سوم (Last Banner) خوش آمدید!** 🌍\n\n"
-        "آیا هوش و ذکاوت رهبری یک ابرقدرت، یک کشور در حال توسعه یا یک گروهک چریکی قدرتمند را در بحبوحه‌ی مدرن‌ترین جنگ تاریخ دارید؟\n"
+        "آیا هوش و ذکاوت رهبری یک ابرقدرت, یک کشور در حال توسعه یا یک گروهک چریکی قدرتمند را در بحبوحه‌ی مدرن‌ترین جنگ تاریخ دارید؟\n"
         "در این سیزن، همه‌چیز دستخوش تغییر شده است؛ از تحلیل رول‌ها گرفته تا انبار تجهیزات مدرن، سیستم سوددهی خودکارِ سر وقت و سیستم‌های خرید نظامی، همگی به صورت ۱۰۰٪ هوشمند روی همین ربات مدیریت می‌شوند. نیروی انسانی، تانک‌ها، جت‌ها و موشک‌های بالستیک شما منتظر اولین دستور شما هستند.\n\n"
         "در این بازی، ربات ما همه کارها را به صورت کاملاً خودکار، آنی و بدون هیچ معطلی با بالاترین سرعت برای شما پردازش و ثبت می‌کند. اتاق فرماندهی شما اینجاست و همه‌چیز در کسری از ثانیه تحت کنترل ربات اجرا خواهد شد.\n\n"
         "👇 **همین حالا جبهه خود را انتخاب کنید:** برای شروع، روی دکمه زیر ضربه بزنید:"
@@ -145,7 +145,7 @@ def main_menu(call):
     text = "🚩 **انتخاب کنید که قصد رزرو جبهه در کدام منطقه را دارید:**"
     
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_euro_usa")
+    btn1 = types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_europe")
     btn2 = types.InlineKeyboardButton("🌏 آسیا", callback_data="cat_asia")
     btn3 = types.InlineKeyboardButton("🌍 آفریقا", callback_data="cat_africa")
     btn4 = types.InlineKeyboardButton("🪖 گروهک‌ها", callback_data="cat_groups")
@@ -160,7 +160,7 @@ def show_category(call):
     message_id = call.message.message_id
     category_code = call.data.replace("cat_", "")
     
-    titles = {"euro_usa": "🏛️ اروپا و آمریکا", "asia": "🌏 آسیا", "africa": "🌍 آفریقا", "groups": "🪖 گروهک‌ها"}
+    titles = {"europe": "🏛️ اروپا و آمریکا", "asia": "🌏 آسیا", "africa": "🌍 آفریقا", "groups": "🪖 گروهک‌ها"}
     text = f"👇 **لیست جبهه‌های موجود در بخش {titles[category_code]}:**\n\nانتخاب کنید:"
     
     markup = types.InlineKeyboardMarkup(row_width=2)
