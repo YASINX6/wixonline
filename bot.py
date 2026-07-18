@@ -1,8 +1,22 @@
 import telebot
 from telebot import types
 import sqlite3
-# اتصال مستقیم به فایلی که در گیت‌هاب ساختی
-from data.military_data import get_military_info
+import sys
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# حل مشکل مسیردهی پایتون در هاست رندر برای پوشه‌ها
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    if os.path.exists("data/military_data.py") or os.path.exists("data"):
+        from data.military_data import get_military_info
+    else:
+        from military_data import get_military_info
+except ImportError:
+    def get_military_info(country_code):
+        return "❌ خطا: فایل داده‌های نظامی یافت نشد. لطفا مسیر پوشه data را چک کنید."
 
 # توکن رسمی ربات شما
 API_TOKEN = '8648815822:AAHso-sAPat6S_P8yVWSBW0cN_0yR0wijkM'
@@ -12,7 +26,7 @@ bot = telebot.TeleBot(API_TOKEN)
 ADMIN_ID = 7961155790
 ADMIN_USERNAME = "EXLUG" 
 
-# --- بخش دیتابیس کاربری ---
+# --- بخش دیتابیس ---
 def init_db():
     conn = sqlite3.connect('wixonline.db')
     cursor = conn.cursor()
@@ -62,7 +76,7 @@ def reject_player(user_id):
     conn.close()
 # ------------------
 
-# پایگاه داده کامل کشورها و گروهک‌ها جهت رزرو
+# پایگاه داده کامل کشورها و گروهک‌ها
 GAME_ENTITIES = {
     "europe": {
         "usa": {"name": "🇺🇸 آمریکا", "price": "۲۰۰,۰۰۰ تومان", "vip": True},
@@ -84,7 +98,7 @@ GAME_ENTITIES = {
     "asia": {
         "russia": {"name": "😈 روسیه", "price": "۱۷۰,۰۰۰ تومان", "vip": True},
         "china": {"name": "🇨🇳 چین", "price": "۱۵۰,۰۰۰ تومان", "vip": True},
-        "india": {"name": "🇮🇳 هند", "price": "۱۲۰,۰۰۰ تومان", "vip": True},
+        "india": {"name": "🇮🇳 هند", "price": "۱۲۰,۰۰0 تومان", "vip": True},
         "iran": {"name": "🇮🇷 ایران", "price": "۵۰,۰۰۰ تومان", "vip": True},
         "israel": {"name": "🇮🇱 اسرائیل", "price": "۵۰,۰۰۰ تومان", "vip": True},
         "afghanistan": {"name": "🇦🇫 افغانستان", "price": None, "vip": False},
@@ -116,7 +130,6 @@ GAME_ENTITIES = {
     }
 }
 
-# تابع ساخت منوی دکمه‌های شیشه‌ای مانیتورینگ نظامی
 def get_military_menu():
     markup = types.InlineKeyboardMarkup()
     markup.row(
@@ -148,7 +161,6 @@ def get_military_menu():
 def send_welcome(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
-    
     player = get_player(user_id)
     if player and player[3] == 'approved':
         bot.send_message(chat_id, f"⚔️ **فرمانده! شما قبلاً عضو شده‌اید و نقش شما تأیید شده است:**\n🎭 جبهه شما: **{player[2]}**", parse_mode="Markdown")
@@ -157,17 +169,12 @@ def send_welcome(message):
     welcome_text = (
         "🌍 **به بزرگترین شبیه‌ساز جنگ جهانی سوم (Last Banner) خوش آمدید!** 🌍\n\n"
         "آیا هوش و ذکاوت رهبری یک ابرقدرت، یک کشور در حال توسعه یا یک گروهک چریکی قدرتمند را در بحبوحه‌ی مدرن‌ترین جنگ تاریخ دارید؟\n"
-        "در این سیزن، همه‌چیز دستخوش تغییر شده است؛ از تحلیل رول‌ها گرفته تا انبار تجهیزات مدرن، سیستم سوددهی خودکارِ سر وقت و سیستم‌های خرید نظامی، همگی به صورت ۱۰۰٪ هوشمند روی همین ربات مدیریت می‌شوند. نیروی انسانی، تانک‌ها، جت‌ها و موشک‌های بالستیک شما منتظر اولین دستور شما هستند.\n\n"
-        "در این بازی، ربات ما همه کارها را به صورت کاملاً خودکار، آنی و بدون هیچ معطلی با بالاترین سرعت برای شما پردازش و ثبت می‌کند. اتاق فرماندهی شما اینجاست و همه‌چیز در کسری از ثانیه تحت کنترل ربات اجرا خواهد شد.\n\n"
         "👇 **همین حالا جبهه خود را انتخاب کنید:** برای شروع، روی دکمه زیر ضربه بزنید:"
     )
-    
     markup = types.InlineKeyboardMarkup()
-    btn_select = types.InlineKeyboardButton("🌍 رزرو کشور یا گروهک", callback_data="main_menu")
-    markup.add(btn_select)
+    markup.add(types.InlineKeyboardButton("🌍 رزرو کشور یا گروهک", callback_data="main_menu"))
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode="Markdown")
 
-# دستور مستقل برای ورود به هاب نظامی اطلاعات تسلیحات
 @bot.message_handler(commands=['military'])
 def send_military_hub(message):
     welcome_text = (
@@ -176,173 +183,106 @@ def send_military_hub(message):
     )
     bot.send_message(message.chat.id, welcome_text, reply_markup=get_military_menu(), parse_mode="Markdown")
 
-# منوی اصلی دسته‌ب بندی‌ها برای رزرو جبهه
 @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
 def main_menu(call):
-    chat_id = call.message.chat.id
-    message_id = call.message.message_id
-    text = "🚩 **انتخاب کنید که قصد رزرو جبهه در کدام منطقه را دارید:**"
-    
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_europe")
-    btn2 = types.InlineKeyboardButton("🌏 آسیا", callback_data="cat_asia")
-    btn3 = types.InlineKeyboardButton("🌍 آفریقا", callback_data="cat_africa")
-    btn4 = types.InlineKeyboardButton("🪖 گروهک‌ها", callback_data="cat_groups")
-    markup.add(btn1, btn2, btn3, btn4)
-    
-    bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=markup, parse_mode="Markdown")
+    markup.add(
+        types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_europe"),
+        types.InlineKeyboardButton("🌏 آسیا", callback_data="cat_asia"),
+        types.InlineKeyboardButton("🌍 آفریقا", callback_data="cat_africa"),
+        types.InlineKeyboardButton("🪖 گروهک‌ها", callback_data="cat_groups")
+    )
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="🚩 **انتخاب کنید که قصد رزرو جبهه در کدام منطقه را دارید:**", reply_markup=markup, parse_mode="Markdown")
 
-# نمایش لیست جبهه‌های یک دسته خاص جهت رزرو
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cat_"))
 def show_category(call):
-    chat_id = call.message.chat.id
-    message_id = call.message.message_id
     category_code = call.data.replace("cat_", "")
-    
     titles = {"europe": "🏛️ اروپا و آمریکا", "asia": "🌏 آسیا", "africa": "🌍 آفریقا", "groups": "🪖 گروهک‌ها"}
-    text = f"👇 **لیست جبهه‌های موجود در بخش {titles[category_code]}:**\n\nانتخاب کنید:"
-    
     markup = types.InlineKeyboardMarkup(row_width=2)
     buttons = []
-    
     for code, info in GAME_ENTITIES[category_code].items():
-        if info["vip"]:
-            btn_text = f"⭐ {info['name']} (VIP)"
-        else:
-            btn_text = info["name"]
-            
-        btn = types.InlineKeyboardButton(btn_text, callback_data=f"select_{category_code}_{code}")
-        buttons.append(btn)
-        
+        btn_text = f"⭐ {info['name']} (VIP)" if info["vip"] else info["name"]
+        buttons.append(types.InlineKeyboardButton(btn_text, callback_data=f"select_{category_code}_{code}"))
     markup.add(*buttons)
-    btn_back = types.InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu")
-    markup.add(btn_back)
-    
-    bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=markup, parse_mode="Markdown")
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت به منوی اصلی", callback_data="main_menu"))
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"👇 **لیست جبهه‌های موجود در بخش {titles[category_code]}:**", reply_markup=markup, parse_mode="Markdown")
 
-# پردازش انتخاب نهایی رزرو جبهه
 @bot.callback_query_handler(func=lambda call: call.data.startswith("select_"))
 def process_selection(call):
-    chat_id = call.message.chat.id
-    message_id = call.message.message_id
-    user_id = call.from_user.id
-    username = call.from_user.username or "ندارد"
-    
     parts = call.data.split("_", 2)
-    category = parts[1]
-    entity_code = parts[2]
-    
+    category, entity_code = parts[1], parts[2]
     entity_info = GAME_ENTITIES[category][entity_code]
     name = entity_info["name"]
     
     if entity_info["vip"]:
-        text = (
-            f"💎 **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n"
-            f"💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n"
-            "⚠️ جهت پرداخت هزینه رزرو و نهایی کردن خرید، روی دکمه زیر کلیک کرده و رسید و نام جبهه را برای مالک ارسال کنید تا اکانت شما فعال شود:"
-        )
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        btn_pay = types.InlineKeyboardButton("💬 پیام به مالک جهت خرید و فعالسازی", url=f"https://t.me/{ADMIN_USERNAME}")
-        btn_back = types.InlineKeyboardButton("🔙 بازگشت به منو", callback_data=f"cat_{category}")
-        markup.add(btn_pay, btn_back)
-        
-        bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=markup, parse_mode="Markdown")
-        
+        text = f"💎 **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n⚠️ جهت پرداخت به مالک پیام دهید:"
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("💬 پیام به مالک", url=f"https://t.me/{ADMIN_USERNAME}"), types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{category}"))
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=markup, parse_mode="Markdown")
     else:
-        set_pending_player(user_id, username, name)
-        
-        bot.edit_message_text(
-            chat_id=chat_id, 
-            message_id=message_id, 
-            text=f"⏳ **درخواست رزرو جبهه {name} ثبت شد و در حال انتظار برای تایید مالک بازی می‌باشد.**\n\nنتیجه به زودی از همین طریق به شما اعلام می‌شود.",
-            reply_markup=None,
-            parse_mode="Markdown"
-        )
+        set_pending_player(call.from_user.id, call.from_user.username or "ندارد", name)
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"⏳ **درخواست رزرو جبهه {name} ثبت شد و در انتظار تایید است.**")
         
         admin_markup = types.InlineKeyboardMarkup()
-        btn_approve = types.InlineKeyboardButton("✅ تایید درخواست", callback_data=f"admin_approve_{user_id}")
-        btn_reject = types.InlineKeyboardButton("❌ رد درخواست", callback_data=f"admin_reject_{user_id}")
-        admin_markup.add(btn_approve, btn_reject)
-        
-        admin_text = (
-            f"📥 **درخواست رزرو جبهه عادی جدید!**\n\n"
-            f"👤 **کاربر:** @{username}\n"
-            f"🆔 **آیدی: ** `{user_id}`\n"
-            f"🌍 **جبهه درخواستی:** {name}\n\n"
-            f"آیا این درخواست را تایید می‌کنید؟"
-        )
-        
-        try:
-            bot.send_message(ADMIN_ID, admin_text, reply_markup=admin_markup, parse_mode="Markdown")
-        except Exception as e:
-            print(f"خطا در ارسال پیام به ادمین: {e}")
+        admin_markup.add(types.InlineKeyboardButton("✅ تایید", callback_data=f"admin_approve_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد", callback_data=f"admin_reject_{call.from_user.id}"))
+        bot.send_message(ADMIN_ID, f"📥 **درخواست جدید!**\n👤 کاربر: @{call.from_user.username}\n🌍 جبهه: {name}", reply_markup=admin_markup, parse_mode="Markdown")
 
-# پردازش کلیک روی دکمه‌های مانیتورینگ نظامی (فراخوانی هوشمند از فایل خارجی شما)
 @bot.callback_query_handler(func=lambda call: call.data.startswith('mil_'))
 def handle_military_click(call):
     country_code = call.data.replace('mil_', '')
-    
-    # فراخوانی امن دیتای متنی از فایل مخزن شما
     military_text = get_military_info(country_code)
-    
     back_markup = types.InlineKeyboardMarkup()
     back_markup.add(types.InlineKeyboardButton("🔙 بازگشت به لیست فاکشن‌ها", callback_data="back_to_mil_menu"))
-    
     try:
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=military_text,
-            reply_markup=back_markup,
-            parse_mode="Markdown"
-        )
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=military_text, reply_markup=back_markup, parse_mode="Markdown")
     except Exception:
         bot.send_message(call.message.chat.id, military_text, reply_markup=back_markup)
 
-# دکمه بازگشت به هاب منوی نظامی
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_mil_menu")
 def back_to_military_hub(call):
-    welcome_text = (
-        "⚔️ **به سامانه اطلاعات استراتژیک Last Banner خوش آمدید** ⚔️\n\n"
-        "فاکشن مورد نظر خود را برای مانیتورینگ انتخاب کنید:"
-    )
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text=welcome_text,
-        reply_markup=get_military_menu(),
-        parse_mode="Markdown"
-    )
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="⚔️ **فاکشن مورد نظر خود را برای مانیتورینگ انتخاب کنید:**", reply_markup=get_military_menu(), parse_mode="Markdown")
 
-# پردازش تایید یا رد درخواست‌ها توسط لیدر اصلی بازی
 @bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
 def admin_decision(call):
-    if call.from_user.id != ADMIN_ID:
-        bot.answer_callback_query(call.id, "❌ شما مالک بازی نیستید!", show_alert=True)
-        return
-        
+    if call.from_user.id != ADMIN_ID: return
     action = call.data.replace("admin_", "")
-    
     if action.startswith("approve_"):
-        target_user_id = int(action.replace("approve_", ""))
-        player = get_player(target_user_id)
+        target_id = int(action.replace("approve_", ""))
+        player = get_player(target_id)
         if player:
-            approve_player(target_user_id)
-            try:
-                bot.send_message(target_user_id, f"🎉 **تبریک فرمانده!**\nدرخواست شما برای رهبری **{player[2]}** توسط مالک بازی تایید شد.\n\nبه زودی سیزن آغاز می‌شود!")
-            except Exception:
-                pass
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"✅ درخواست کاربر `{target_user_id}` برای جبهه **{player[2]}** با موفقیت **تایید** شد.", reply_markup=None, parse_mode="Markdown")
-            
+            approve_player(target_id)
+            try: bot.send_message(target_id, f"🎉 **درخواست شما برای رهبری {player[2]} تایید شد!**")
+            except: pass
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"✅ تایید شد.")
     elif action.startswith("reject_"):
-        target_user_id = int(action.replace("reject_", ""))
-        player = get_player(target_user_id)
+        target_id = int(action.replace("reject_", ""))
+        player = get_player(target_id)
         if player:
-            reject_player(target_user_id)
-            try:
-                bot.send_message(target_user_id, f"❌ متاسفانه درخواست شما برای رزرو جبهه **{player[2]}** رد شد.")
-            except Exception:
-                pass
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ درخواست کاربر `{target_user_id}` برای جبهه **{player[2]}** **رد** شد.", reply_markup=None, parse_mode="Markdown")
+            reject_player(target_id)
+            try: bot.send_message(target_id, f"❌ درخواست شما رد شد.")
+            except: pass
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ رد شد.")
 
-bot.polling()
+# --- ترفند فریب دادن رندر در وب‌سرویس رایگان ---
+class DummyWebhookServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"Velora Bot is Live and Running!")
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), DummyWebhookServer)
+    print(f"🌍 Web Server Dummy started on port {port}")
+    server.serve_forever()
+
+if __name__ == '__main__':
+    # روشن کردن سرور پاسخگو به رندر در یک ترد مجزا
+    web_thread = threading.Thread(target=run_web_server)
+    web_thread.daemon = True
+    web_thread.start()
+    
+    print("🤖 Velora Game Bot Started Successfully...")
+    bot.infinity_polling(skip_pending=True)
+    
