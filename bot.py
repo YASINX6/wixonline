@@ -6,26 +6,63 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# پیدا کردن مسیر دقیق پوشه جاری ربات در هاست رندر
+# پیدا کردن مسیر دقیق پوشه جاری ربات
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
 
-print("🔄 Starting Velora Game Bot...")
+print("🔄 Starting Velora Game Bot with Raw Loader...")
 
-# ایمپورت کردن داینامیک و امن فایل جداگانه نظامی
+# خواندن مستقیم دیتای نظامی از فایل به صورت متنی (بدون نیاز به امپورت)
 def get_military_info(country_code):
+    file_path = os.path.join(BASE_DIR, "military_data.py")
+    
+    if not os.path.exists(file_path):
+        return f"❌ خطا: فایل military_data.py در مسیر {file_path} فیزیکی سرور یافت نشد."
+        
     try:
-        # بررسی وجود فایل military_data.py در مسیر اصلی گیت‌هاب
-        if os.path.exists(os.path.join(BASE_DIR, "military_data.py")):
-            import military_data
-            # دوباره لود کردن فایل برای اعمال تغییرات جدید در لحظه
-            import importlib
-            importlib.reload(military_data)
-            return military_data.get_military_info(country_code)
+        # باز کردن و خواندن فایل با رمزگذاری UTF-8 برای پشتیبانی از فارسی
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        # پیدا کردن متن فاکشن مورد نظر در فایل
+        # این بخش دنبال کد کشور در دیتابیس متنی می‌گردد
+        lines = content.split('\n')
+        extracted_text = []
+        capture = False
+        
+        for line in lines:
+            if f'"{country_code}":' in line or f"'{country_code}':" in line:
+                capture = True
+                # برداشتن متن داخل کوتیشن
+                start_idx = line.find('"') if '"' in line else line.find("'")
+                # اگر متن در همان خط اول کلید بود
+                if start_idx != -1:
+                    line_data = line[start_idx:].strip().strip(',').strip('"').strip("'")
+                    if line_data and not line_data.startswith(country_code):
+                        extracted_text.append(line_data)
+                continue
+                
+            if capture:
+                if '"' in line or "'" in line:
+                    clean_line = line.replace('\\n', '\n').strip().strip(',').strip('"').strip("'")
+                    if clean_line.endswith('}'): # پایان دیکشنری
+                        clean_line = clean_line.rstrip('}').strip().strip('"').strip("'")
+                        if clean_line: extracted_text.append(clean_line)
+                        break
+                    extracted_text.append(clean_line)
+                if line.strip().endswith(',') and not ('"' in line or "'" in line):
+                    continue
+                if '}' in line and not ('"' in line or "'" in line):
+                    break
+                    
+        if extracted_text:
+            # تبدیل کاراکترهای ترخیص خط به خط واقعی
+            final_text = "\n".join(extracted_text).replace('\\n', '\n')
+            return final_text
         else:
-            return "❌ خطا: فایل military_data.py در مسیر اصلی پروژه پیدا نشد."
+            return f"🪖 **اطلاعات نظامی این فاکشن به زودی آپدیت می‌شود.**\nکد سیستم: {country_code}"
+            
     except Exception as e:
-        return f"⚠️ خطا در خواندن اطلاعات نظامی از فایل: {e}"
+        return f"⚠️ خطا در خواندن متنی فایل نظامی: {e}"
 
 API_TOKEN = '8648815822:AAEMeDbHCd3a_D_SQCTnLlT-mES5irfpyBo'
 bot = telebot.TeleBot(API_TOKEN)
@@ -47,7 +84,7 @@ def init_db():
         ''')
         conn.commit()
         conn.close()
-        print("✅ Database initialized successfully.")
+        print("✅ Database initialized.")
     except Exception as e:
         print(f"❌ DATABASE ERROR: {e}")
 
@@ -190,7 +227,6 @@ def send_welcome(message):
         faction_name = player[2]
         entity_code = "unknown"
         
-        # شناسایی خودکار فاکشن کاربر بر اساس متن نام آن
         for cat, entities in GAME_ENTITIES.items():
             for code, info in entities.items():
                 if code in faction_name.lower() or info["name"] in faction_name:
@@ -278,7 +314,6 @@ def handle_user_military(call):
     if is_banned(call.from_user.id): return
     entity_code = call.data.replace("user_mil_", "")
     
-    # فراخوانی زنده از فایل جداگانه military_data.py
     military_text = get_military_info(entity_code)
     
     back_markup = types.InlineKeyboardMarkup()
@@ -352,4 +387,4 @@ if __name__ == '__main__':
     web_thread.start()
     
     bot.infinity_polling(skip_pending=True)
-                                            
+    
