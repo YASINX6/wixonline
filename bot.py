@@ -6,26 +6,26 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# پیدا کردن مسیر دقیق پوشه جاری برای جلوگیری از ارور عدم شناسایی فایل‌ها
+# پیدا کردن مسیر دقیق پوشه جاری ربات در هاست رندر
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 
-print("🔄 Starting initialization...")
+print("🔄 Starting Velora Game Bot...")
 
-# لود کردن هوشمند فایل نظامی جداگانه بدون کراش دادن ربات
+# ایمپورت کردن داینامیک و امن فایل جداگانه نظامی
 def get_military_info(country_code):
     try:
-        # ابتدا مسیرهای احتمالی فایل جداگانه را بررسی می‌کند
-        if os.path.exists(os.path.join(BASE_DIR, "data", "military_data.py")):
-            from data.military_data import get_military_info as fetch_info
-        elif os.path.exists(os.path.join(BASE_DIR, "military_data.py")):
-            from military_data import fetch_info
+        # بررسی وجود فایل military_data.py در مسیر اصلی گیت‌هاب
+        if os.path.exists(os.path.join(BASE_DIR, "military_data.py")):
+            import military_data
+            # دوباره لود کردن فایل برای اعمال تغییرات جدید در لحظه
+            import importlib
+            importlib.reload(military_data)
+            return military_data.get_military_info(country_code)
         else:
-            return "❌ خطا: فایل داده‌های نظامی (military_data.py) در هاست یافت نشد. لطفا مسیر گیت‌هاب را چک کنید."
-        
-        return fetch_info(country_code)
+            return "❌ خطا: فایل military_data.py در مسیر اصلی پروژه پیدا نشد."
     except Exception as e:
-        return f"⚠️ خطا در خواندن اطلاعات نظامی: {e}"
+        return f"⚠️ خطا در خواندن اطلاعات نظامی از فایل: {e}"
 
 API_TOKEN = '8648815822:AAEMeDbHCd3a_D_SQCTnLlT-mES5irfpyBo'
 bot = telebot.TeleBot(API_TOKEN)
@@ -47,7 +47,7 @@ def init_db():
         ''')
         conn.commit()
         conn.close()
-        print("✅ Database initialized.")
+        print("✅ Database initialized successfully.")
     except Exception as e:
         print(f"❌ DATABASE ERROR: {e}")
 
@@ -181,16 +181,6 @@ def is_banned(user_id):
         return True
     return False
 
-def get_military_menu():
-    markup = types.InlineKeyboardMarkup()
-    markup.row(types.InlineKeyboardButton("🇺🇸 آمریکا (VIP)", callback_data="mil_usa"), types.InlineKeyboardButton("🇷🇺 روسیه (VIP)", callback_data="mil_russia"))
-    markup.row(types.InlineKeyboardButton("🇨🇳 چین (VIP)", callback_data="mil_china"), types.InlineKeyboardButton("🇬🇧 بریتانیا (VIP)", callback_data="mil_uk"))
-    markup.row(types.InlineKeyboardButton("🇫🇷 فرانسه (VIP)", callback_data="mil_france"), types.InlineKeyboardButton("🇩🇪 آلمان (VIP)", callback_data="mil_germany"))
-    markup.row(types.InlineKeyboardButton("🇮🇳 هند (VIP)", callback_data="mil_india"), types.InlineKeyboardButton("🇮🇱 اسرائیل (VIP)", callback_data="mil_israel"))
-    markup.row(types.InlineKeyboardButton("🟢 ارتش ایران", callback_data="mil_iran"), types.InlineKeyboardButton("🔴 سپاه پاسداران", callback_data="mil_irgc"))
-    markup.row(types.InlineKeyboardButton("💀 سازمان واگنر", callback_data="mil_wagner"))
-    return markup
-
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     if is_banned(message.from_user.id): return
@@ -199,9 +189,11 @@ def send_welcome(message):
     if player and player[3] == 'approved':
         faction_name = player[2]
         entity_code = "unknown"
+        
+        # شناسایی خودکار فاکشن کاربر بر اساس متن نام آن
         for cat, entities in GAME_ENTITIES.items():
             for code, info in entities.items():
-                if info["name"] in faction_name or faction_name in info["name"]:
+                if code in faction_name.lower() or info["name"] in faction_name:
                     entity_code = code
                     break
 
@@ -286,7 +278,7 @@ def handle_user_military(call):
     if is_banned(call.from_user.id): return
     entity_code = call.data.replace("user_mil_", "")
     
-    # واکشی اطلاعات از فایل بیرونی به صورت داینامیک
+    # فراخوانی زنده از فایل جداگانه military_data.py
     military_text = get_military_info(entity_code)
     
     back_markup = types.InlineKeyboardMarkup()
@@ -306,7 +298,7 @@ def back_to_user_menu(call):
         entity_code = "unknown"
         for cat, entities in GAME_ENTITIES.items():
             for code, info in entities.items():
-                if info["name"] in faction_name or faction_name in info["name"]:
+                if code in faction_name.lower() or info["name"] in faction_name:
                     entity_code = code
                     break
                     
@@ -359,6 +351,5 @@ if __name__ == '__main__':
     web_thread.daemon = True
     web_thread.start()
     
-    print("🤖 Velora Game Bot Starting Polling...")
     bot.infinity_polling(skip_pending=True)
                                             
