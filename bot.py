@@ -60,7 +60,7 @@ def reject_player(user_id):
     conn.close()
 # ------------------
 
-# پایگاه داده کامل کشورها و گروهک‌ها
+# پایگاه داده کامل کشورها و گروهک‌ها (بدون کاراکتر زیرخط در کدها)
 GAME_ENTITIES = {
     "europe": {
         "usa": {"name": "🇺🇸 آمریکا", "price": "۲۰۰,۰۰۰ تومان", "vip": True},
@@ -105,11 +105,11 @@ GAME_ENTITIES = {
     },
     "groups": {
         "irgc": {"name": "🔴 سپاه پاسداران", "price": "۶۰,۰۰۰ تومان", "vip": True},
-        "wagner": {"name": "💀 گروه واگنر", "price": "۶۰,۰۰۰ تومان", "vip": True},
+        "wagner": {"name": "💀 گروه واغنر", "price": "۶۰,۰۰۰ تومان", "vip": True},
         "qaeda": {"name": "🏴 القاعده", "price": None, "vip": False},
         "daesh": {"name": "🏴‍☠️ داعش", "price": None, "vip": False},
         "taliban": {"name": "🪖 طالبان", "price": None, "vip": False},
-        "hizb_lebanon": {"name": "💛 حزب الله", "price": None, "vip": False},
+        "hizblebanon": {"name": "💛 حزب‌الله لبنان", "price": None, "vip": False},
         "kurdistan": {"name": "☀️ حزب کردستان", "price": None, "vip": False},
     }
 }
@@ -126,7 +126,7 @@ def send_welcome(message):
 
     welcome_text = (
         "🌍 **به بزرگترین شبیه‌ساز جنگ جهانی سوم (Last Banner) خوش آمدید!** 🌍\n\n"
-        "آیا هوش و ذکاوت رهبری یک ابرقدرت, یک کشور در حال توسعه یا یک گروهک چریکی قدرتمند را در بحبوحه‌ی مدرن‌ترین جنگ تاریخ دارید؟\n"
+        "آیا هوش و ذکاوت رهبری یک ابرقدرت، یک کشور در حال توسعه یا یک گروهک چریکی قدرتمند را در بحبوحه‌ی مدرن‌ترین جنگ تاریخ دارید؟\n"
         "در این سیزن، همه‌چیز دستخوش تغییر شده است؛ از تحلیل رول‌ها گرفته تا انبار تجهیزات مدرن، سیستم سوددهی خودکارِ سر وقت و سیستم‌های خرید نظامی، همگی به صورت ۱۰۰٪ هوشمند روی همین ربات مدیریت می‌شوند. نیروی انسانی، تانک‌ها، جت‌ها و موشک‌های بالستیک شما منتظر اولین دستور شما هستند.\n\n"
         "در این بازی، ربات ما همه کارها را به صورت کاملاً خودکار، آنی و بدون هیچ معطلی با بالاترین سرعت برای شما پردازش و ثبت می‌کند. اتاق فرماندهی شما اینجاست و همه‌چیز در کسری از ثانیه تحت کنترل ربات اجرا خواهد شد.\n\n"
         "👇 **همین حالا جبهه خود را انتخاب کنید:** برای شروع، روی دکمه زیر ضربه بزنید:"
@@ -137,7 +137,7 @@ def send_welcome(message):
     markup.add(btn_select)
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode="Markdown")
 
-# منوی اصلی دسته‌بندی‌ها
+# منوی اصلی دسته‌ب بندی‌ها
 @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
 def main_menu(call):
     chat_id = call.message.chat.id
@@ -189,7 +189,8 @@ def process_selection(call):
     user_id = call.from_user.id
     username = call.from_user.username or "ندارد"
     
-    parts = call.data.split("_")
+    # تفکیک دقیق داده با ۲ کاراکتر زیرخط اول
+    parts = call.data.split("_", 2)
     category = parts[1]
     entity_code = parts[2]
     
@@ -269,4 +270,3 @@ def admin_decision(call):
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ درخواست کاربر `{target_user_id}` برای جبهه **{player[2]}** **رد** شد.", reply_markup=None, parse_mode="Markdown")
 
 bot.polling()
-    
