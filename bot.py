@@ -26,7 +26,7 @@ except Exception as e:
         return "❌ خطا: فایل داده‌های نظامی یافت نشد. لطفا مسیر پوشه را چک کنید."
 
 # توکن رسمی ربات شما
-API_TOKEN = '8648815822:AAHso-sAPat6S_P8yVWSBW0cN_0yR0wijkM'
+API_TOKEN = '8648815822:AAH3uJ4aN_oCGP_ckppYNQgasBVkGk5_OzM'
 bot = telebot.TeleBot(API_TOKEN)
 
 ADMIN_ID = 7961155790
