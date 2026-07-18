@@ -6,20 +6,26 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# پیدا کردن مسیر دقیق پوشه جاری برای جلوگیری از ارور عدم شناسایی فایل‌ها
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
 
 print("🔄 Starting initialization...")
 
-try:
-    if os.path.exists("data/military_data.py") or os.path.exists("data"):
-        from data.military_data import get_military_info
-    else:
-        from military_data import get_military_info
-    print("✅ Military data imported successfully.")
-except Exception as e:
-    print(f"⚠️ IMPORT ERROR: {e}")
-    def get_military_info(country_code):
-        return "❌ خطا: فایل داده‌های نظامی یافت نشد."
+# لود کردن هوشمند فایل نظامی جداگانه بدون کراش دادن ربات
+def get_military_info(country_code):
+    try:
+        # ابتدا مسیرهای احتمالی فایل جداگانه را بررسی می‌کند
+        if os.path.exists(os.path.join(BASE_DIR, "data", "military_data.py")):
+            from data.military_data import get_military_info as fetch_info
+        elif os.path.exists(os.path.join(BASE_DIR, "military_data.py")):
+            from military_data import fetch_info
+        else:
+            return "❌ خطا: فایل داده‌های نظامی (military_data.py) در هاست یافت نشد. لطفا مسیر گیت‌هاب را چک کنید."
+        
+        return fetch_info(country_code)
+    except Exception as e:
+        return f"⚠️ خطا در خواندن اطلاعات نظامی: {e}"
 
 API_TOKEN = '8648815822:AAEMeDbHCd3a_D_SQCTnLlT-mES5irfpyBo'
 bot = telebot.TeleBot(API_TOKEN)
@@ -29,7 +35,7 @@ ADMIN_USERNAME = "EXLUG"
 
 def init_db():
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS players (
@@ -49,7 +55,7 @@ init_db()
 
 def get_player(user_id):
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM players WHERE user_id = ?", (user_id,))
         player = cursor.fetchone()
@@ -60,7 +66,7 @@ def get_player(user_id):
 
 def set_pending_player(user_id, username, role):
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT OR REPLACE INTO players (user_id, username, role, status)
@@ -73,7 +79,7 @@ def set_pending_player(user_id, username, role):
 
 def approve_player(user_id):
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute("UPDATE players SET status = 'approved' WHERE user_id = ?", (user_id,))
         conn.commit()
@@ -83,7 +89,7 @@ def approve_player(user_id):
 
 def ban_player(user_id):
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT OR REPLACE INTO players (user_id, username, role, status)
@@ -97,7 +103,7 @@ def ban_player(user_id):
 
 def unban_player(user_id):
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
         conn.commit()
@@ -108,7 +114,7 @@ def unban_player(user_id):
 
 def reject_player(user_id):
     try:
-        conn = sqlite3.connect('wixonline.db', timeout=10)
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
         conn.commit()
@@ -185,43 +191,13 @@ def get_military_menu():
     markup.row(types.InlineKeyboardButton("💀 سازمان واگنر", callback_data="mil_wagner"))
     return markup
 
-@bot.message_handler(commands=['ban'])
-def handle_ban(message):
-    if message.from_user.id != ADMIN_ID: return
-    try:
-        target_id = int(message.text.split()[1])
-        if ban_player(target_id):
-            bot.send_message(message.chat.id, f"🔨 کاربر `{target_id}` بن شد.", parse_mode="Markdown")
-            try: bot.send_message(target_id, "🚫 شما از بازی بن شدید.")
-            except: pass
-    except:
-        bot.send_message(message.chat.id, "⚠️ نمونه: `/ban 12345678`")
-
-@bot.message_handler(commands=['unban'])
-def handle_unban(message):
-    if message.from_user.id != ADMIN_ID: return
-    try:
-        target_id = int(message.text.split()[1])
-        if unban_player(target_id):
-            bot.send_message(message.chat.id, f"✅ کاربر `{target_id}` آن‌بن شد.")
-            try: bot.send_message(target_id, "🔓 شما مجدداً آزاد شدید.")
-            except: pass
-    except:
-        bot.send_message(message.chat.id, "⚠️ نمونه: `/unban 12345678`")
-
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    if is_banned(message.from_user.id):
-        bot.send_message(message.chat.id, "🚫 شما از این ربات بن شده‌اید.")
-        return
-        
+    if is_banned(message.from_user.id): return
     player = get_player(message.from_user.id)
     
-    # اگر بازیکن تایید شده باشد، منوی مدیریت فاکشن با دو دکمه شیشه‌ای باز می‌شود
     if player and player[3] == 'approved':
         faction_name = player[2]
-        
-        # پیدا کردن کد مخفی فاکشن برای نمایش دیتای نظامی درست
         entity_code = "unknown"
         for cat, entities in GAME_ENTITIES.items():
             for code, info in entities.items():
@@ -230,7 +206,6 @@ def send_welcome(message):
                     break
 
         welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n🎭 جبهه تحت کنترل شما: **{faction_name}**\n\n👇 جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
-        
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("📊 لیست اقتصادی", callback_data="eco_locked"),
@@ -247,12 +222,6 @@ def send_welcome(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🌍 رزرو کشور یا گروهک", callback_data="main_menu"))
     bot.send_message(message.chat.id, welcome_text, reply_markup=markup, parse_mode="Markdown")
-
-@bot.message_handler(commands=['military'])
-def send_military_hub(message):
-    if is_banned(message.from_user.id): return
-    welcome_text = "⚔️ **به سامانه اطلاعات استراتژیک خوش آمدید**\nانتخاب کنید:"
-    bot.send_message(message.chat.id, welcome_text, reply_markup=get_military_menu(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
 def main_menu(call):
@@ -308,24 +277,6 @@ def process_selection(call):
     except Exception as e:
         print(f"Error in selection: {e}")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('mil_'))
-def handle_military_click(call):
-    if is_banned(call.from_user.id): return
-    country_code = call.data.replace('mil_', '')
-    military_text = get_military_info(country_code)
-    back_markup = types.InlineKeyboardMarkup()
-    back_markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_mil_menu"))
-    try:
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=military_text, reply_markup=back_markup, parse_mode="Markdown")
-    except:
-        bot.send_message(call.message.chat.id, military_text, reply_markup=back_markup)
-
-@bot.callback_query_handler(func=lambda call: call.data == "back_to_mil_menu")
-def back_to_military_hub(call):
-    if is_banned(call.from_user.id): return
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="⚔️ **فاکشن مورد نظر خود را برای مانیتورینگ انتخاب کنید:**", reply_markup=get_military_menu(), parse_mode="Markdown")
-
-# --- بخش جدید: هندلرهای دکمه‌های شیشه‌ای کاربری برای پلیرهای تایید شده ---
 @bot.callback_query_handler(func=lambda call: call.data == "eco_locked")
 def handle_eco_locked(call):
     bot.answer_callback_query(call.id, "🔒 این بخش در آپدیت‌های آینده فعال می‌شود!", show_alert=True)
@@ -335,10 +286,7 @@ def handle_user_military(call):
     if is_banned(call.from_user.id): return
     entity_code = call.data.replace("user_mil_", "")
     
-    if entity_code == "unknown":
-        bot.send_message(call.message.chat.id, "❌ خطا در بارگذاری اطلاعات نظامی فاکشن شما.")
-        return
-        
+    # واکشی اطلاعات از فایل بیرونی به صورت داینامیک
     military_text = get_military_info(entity_code)
     
     back_markup = types.InlineKeyboardMarkup()
@@ -369,7 +317,6 @@ def back_to_user_menu(call):
             types.InlineKeyboardButton("🪖 لیست نظامی", callback_data=f"user_mil_{entity_code}")
         )
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=welcome_approved, reply_markup=markup, parse_mode="Markdown")
-# -------------------------------------------------------------------------
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("adm_"))
 def admin_decision(call):
@@ -414,4 +361,4 @@ if __name__ == '__main__':
     
     print("🤖 Velora Game Bot Starting Polling...")
     bot.infinity_polling(skip_pending=True)
-    
+                                            
