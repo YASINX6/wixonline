@@ -77,6 +77,18 @@ def get_player(user_id):
     except:
         return None
 
+def is_faction_taken(faction_name):
+    """بررسی اینکه آیا جبهه قبلاً توسط شخص دیگری رزرو یا تایید شده است یا خیر"""
+    try:
+        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM players WHERE role = ? AND (status = 'approved' OR status = 'pending')", (faction_name,))
+        result = cursor.fetchone()
+        conn.close()
+        return result is not None
+    except:
+        return False
+
 def set_pending_player(user_id, username, role):
     try:
         conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
@@ -230,6 +242,13 @@ def send_welcome(message):
 @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
 def main_menu(call):
     if is_banned(call.from_user.id): return
+    
+    # اگر کاربر خودش جبهه تایید شده دارد نباید منوی انتخاب باز شود
+    player = get_player(call.from_user.id)
+    if player and player[3] in ['approved', 'pending']:
+        bot.answer_callback_query(call.id, f"❌ شما از قبل جبهه ({player[2]}) را دارید!", show_alert=True)
+        return
+
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_europe"),
@@ -260,9 +279,29 @@ def process_selection(call):
         category, entity_code = parts[1], parts[2]
         entity_info = GAME_ENTITIES[category][entity_code]
         name = entity_info["name"]
+        role_name = f"{name} (VIP)" if entity_info["vip"] else name
+        
+        # ۱. بررسی اینکه آیا خود کاربر از قبل جبهه فعال یا پندینگ دارد
+        current_player = get_player(call.from_user.id)
+        if current_player and current_player[3] in ['approved', 'pending']:
+            bot.answer_callback_query(call.id, f"❌ شما از قبل جبهه ({current_player[2]}) را رزرو کرده‌اید!", show_alert=True)
+            return
+
+        # ۲. بررسی اینکه آیا این فاکشن خاص قبلاً توسط شخص دیگری گرفته شده است یا خیر
+        if is_faction_taken(role_name):
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("🔙 بازگشت به لیست", callback_data=f"cat_{category}"))
+            bot.edit_message_text(
+                chat_id=call.message.chat.id, 
+                message_id=call.message.message_id, 
+                text=f"❌ **فرمانده، جبهه {name} از قبل توسط بازیکن دیگری رزرو یا مدیریت می‌شود!**\n\nلطفاً کشور یا جبهه دیگری را انتخاب کنید.", 
+                reply_markup=markup, 
+                parse_mode="Markdown"
+            )
+            return
         
         if entity_info["vip"]:
-            set_pending_player(call.from_user.id, call.from_user.username or "ندارد", f"{name} (VIP)")
+            set_pending_player(call.from_user.id, call.from_user.username or "ندارد", role_name)
             text = f"💎 **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n⚠️ درخواست ثبت شد. جهت پرداخت به مالک پیام دهید:"
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("💬 پیام به مالک", url=f"https://t.me/{ADMIN_USERNAME}"), types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{category}"))
@@ -272,8 +311,10 @@ def process_selection(call):
             admin_markup.add(types.InlineKeyboardButton("✅ تایید VIP", callback_data=f"adm_app_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد", callback_data=f"adm_rej_{call.from_user.id}"))
             bot.send_message(ADMIN_ID, f"👑 **درخواست جبهه VIP!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی: `{call.from_user.id}`\n👑 فاکشن: {name}", reply_markup=admin_markup, parse_mode="Markdown")
         else:
-            set_pending_player(call.from_user.id, call.from_user.username or "ندارد", name)
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"⏳ **درخواست رزرو جبهه {name} ثبت شد.**")
+            set_pending_player(call.from_user.id, call.from_user.username or "ندارد", role_name)
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("🔙 بازگشت به منو", callback_data="main_menu"))
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"⏳ **درخواست رزرو جبهه {name} ثبت شد و برای ادمین ارسال گردید.**", reply_markup=markup, parse_mode="Markdown")
             
             admin_markup = types.InlineKeyboardMarkup()
             admin_markup.add(types.InlineKeyboardButton("✅ تایید", callback_data=f"adm_app_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد", callback_data=f"adm_rej_{call.from_user.id}"))
@@ -363,4 +404,4 @@ if __name__ == '__main__':
     web_thread.start()
     
     bot.infinity_polling(skip_pending=True)
-            
+                
