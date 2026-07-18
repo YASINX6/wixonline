@@ -21,7 +21,7 @@ except Exception as e:
     def get_military_info(country_code):
         return "❌ خطا: فایل داده‌های نظامی یافت نشد."
 
-API_TOKEN = '8648815822:AAHso-sAPat6S_P8yVWSBW0cN_0yR0wijkM'
+API_TOKEN = '8648815822:AAEMeDbHCd3a_D_SQCTnLlT-mES5irfpyBo'
 bot = telebot.TeleBot(API_TOKEN)
 
 ADMIN_ID = 7961155790
