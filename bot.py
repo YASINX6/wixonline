@@ -25,18 +25,19 @@ except Exception as e:
     def get_military_info(country_code):
         return "❌ خطا: فایل داده‌های نظامی یافت نشد. لطفا مسیر پوشه را چک کنید."
 
-# توکن رسمی ربات شما
-API_TOKEN = '8648815822:AAH3uJ4aN_oCGP_ckppYNQgasBVkGk5_OzM'
+# توکن جدید ربات شما (حتماً توکن جدیدت را اینجا جایگزین کن رفیق)
+API_TOKEN = '8648815822:AAHso-sAPat6S_P8yVWSBW0cN_0yR0wijkM'
 bot = telebot.TeleBot(API_TOKEN)
 
 ADMIN_ID = 7961155790
 ADMIN_USERNAME = "EXLUG" 
 
-# --- بخش دیتابیس با مدیریت خطای قفل شدن ---
+# --- بخش دیتابیس آپدیت شده با سیستم بن و استاتوس VIP ---
 def init_db():
     try:
         conn = sqlite3.connect('wixonline.db', timeout=10)
         cursor = conn.cursor()
+        # اضافه شدن ستون status برای مدیریت بن، تأیید معمولی و تأیید VIP
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS players (
                 user_id INTEGER PRIMARY KEY,
@@ -86,6 +87,32 @@ def approve_player(user_id):
         conn.close()
     except:
         pass
+
+def ban_player(user_id):
+    try:
+        conn = sqlite3.connect('wixonline.db', timeout=10)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO players (user_id, username, role, status)
+            VALUES (?, 'BANNED', 'None', 'banned')
+        ''', (user_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"❌ BAN ERROR: {e}")
+        return False
+
+def unban_player(user_id):
+    try:
+        conn = sqlite3.connect('wixonline.db', timeout=10)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except:
+        return False
 
 def reject_player(user_id):
     try:
@@ -142,7 +169,7 @@ GAME_ENTITIES = {
     },
     "groups": {
         "irgc": {"name": "🔴 سپاه پاسداران", "price": "۶۰,۰۰۰ تومان", "vip": True},
-        "wagner": {"name": "💀 گروه واغنر", "price": "۶۰,۰۰۰ تومان", "vip": True},
+        "wagner": {"name": "💀 گروه واغنر", "price": "۶۰,۰۰0 تومان", "vip": True},
         "qaeda": {"name": "🏴 القاعده", "price": None, "vip": False},
         "daesh": {"name": "🏴‍☠️ داعش", "price": None, "vip": False},
         "taliban": {"name": "🪖 طالبان", "price": None, "vip": False},
@@ -150,6 +177,13 @@ GAME_ENTITIES = {
         "kurdistan": {"name": "☀️ حزب کردستان", "price": None, "vip": False},
     }
 }
+
+# میان‌افزار چک کردن بن بودن کاربر
+def is_banned(user_id):
+    player = get_player(user_id)
+    if player and player[3] == 'banned':
+        return True
+    return False
 
 def get_military_menu():
     markup = types.InlineKeyboardMarkup()
@@ -161,13 +195,49 @@ def get_military_menu():
     markup.row(types.InlineKeyboardButton("💀 سازمان واگنر", callback_data="mil_wagner"))
     return markup
 
+# --- دستورات مدیریت ادمین (بن و آن‌بن) ---
+@bot.message_handler(commands=['ban'])
+def handle_ban(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        target_id = int(message.text.split()[1])
+        if ban_player(target_id):
+            bot.send_message(message.chat.id, f"🔨 کاربر با آیدی `{target_id}` با موفقیت بن شد و از بازی اخراج گردید.", parse_mode="Markdown")
+            try: bot.send_message(target_id, "🚫 شما به دلیل نقض قوانین از بازی Velora Game بن شدید.")
+            except: pass
+        else:
+            bot.send_message(message.chat.id, "❌ خطایی رخ داد.")
+    except:
+        bot.send_message(message.chat.id, "⚠️ دستور اشتباه است. نمونه صحیح:\n`/ban 12345678`", parse_mode="Markdown")
+
+@bot.message_handler(commands=['unban'])
+def handle_unban(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        target_id = int(message.text.split()[1])
+        if unban_player(target_id):
+            bot.send_message(message.chat.id, f"✅ کاربر با آیدی `{target_id}` آن‌بن شد.", parse_mode="Markdown")
+            try: bot.send_message(target_id, "🔓 شما مجدداً مجاز به شرکت در بازی Velora Game شدید.")
+            except: pass
+    except:
+        bot.send_message(message.chat.id, "⚠️ دستور اشتباه است. نمونه صحیح:\n`/unban 12345678`", parse_mode="Markdown")
+# --------------------------------------
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
+    if is_banned(message.from_user.id):
+        bot.send_message(message.chat.id, "🚫 شما از این ربات بن شده‌اید.")
+        return
+        
     try:
         player = get_player(message.from_user.id)
         if player and player[3] == 'approved':
             bot.send_message(message.chat.id, f"⚔️ **فرمانده! شما قبلاً عضو شده‌اید:**\n🎭 جبهه شما: **{player[2]}**", parse_mode="Markdown")
             return
+        elif player and player[3] == 'pending':
+            bot.send_message(message.chat.id, f"⏳ **درخواست قبلی شما برای جبهه ({player[2]}) هنوز در انتظار تایید ادمین است.**")
+            return
+
         welcome_text = "🌍 **به بزرگترین شبیه‌ساز جنگ جهانی سوم خوش آمدید!**\n👇 جبهه خود را انتخاب کنید:"
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🌍 رزرو کشور یا گروهک", callback_data="main_menu"))
@@ -177,11 +247,13 @@ def send_welcome(message):
 
 @bot.message_handler(commands=['military'])
 def send_military_hub(message):
+    if is_banned(message.from_user.id): return
     welcome_text = "⚔️ **به سامانه اطلاعات استراتژیک خوش آمدید**\nانتخاب کنید:"
     bot.send_message(message.chat.id, welcome_text, reply_markup=get_military_menu(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
 def main_menu(call):
+    if is_banned(call.from_user.id): return
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_europe"),
@@ -193,6 +265,7 @@ def main_menu(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cat_"))
 def show_category(call):
+    if is_banned(call.from_user.id): return
     category_code = call.data.replace("cat_", "")
     titles = {"europe": "🏛️ اروپا و آمریکا", "asia": "🌏 آسیا", "africa": "🌍 آفریقا", "groups": "🪖 گروهک‌ها"}
     markup = types.InlineKeyboardMarkup(row_width=2)
@@ -206,6 +279,7 @@ def show_category(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("select_"))
 def process_selection(call):
+    if is_banned(call.from_user.id): return
     try:
         parts = call.data.split("_", 2)
         category, entity_code = parts[1], parts[2]
@@ -213,22 +287,31 @@ def process_selection(call):
         name = entity_info["name"]
         
         if entity_info["vip"]:
-            text = f"💎 **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n⚠️ جهت پرداخت به مالک پیام دهید:"
+            # ارتقا: کاربر VIP علاوه بر پیام به مالک، درخواستش برای تو ثبت موقت می‌شود تا بتوانی تاییدش کنی!
+            set_pending_player(call.from_user.id, call.from_user.username or "ندارد", f"{name} (VIP)")
+            
+            text = f"💎 **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n⚠️ درخواست شما ثبت شد. جهت پرداخت نهایی و تسریع در تایید به مالک پیام دهید:"
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("💬 پیام به مالک", url=f"https://t.me/{ADMIN_USERNAME}"), types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{category}"))
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=markup, parse_mode="Markdown")
+            
+            # ارسال نوتیفیکیشن برای تو (ادمین) همراه دکت دکمه تایید پرداخت/VIP
+            admin_markup = types.InlineKeyboardMarkup()
+            admin_markup.add(types.InlineKeyboardButton("✅ تایید پرداخت و واگذاری VIP", callback_data=f"admin_approve_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد درخواست", callback_data=f"admin_reject_{call.from_user.id}"))
+            bot.send_message(ADMIN_ID, f"👑 **درخواست جبهه VIP!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی عددی: `{call.from_user.id}`\n👑 فاکشن درخواستی: {name}", reply_markup=admin_markup, parse_mode="Markdown")
         else:
             set_pending_player(call.from_user.id, call.from_user.username or "ندارد", name)
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"⏳ **درخواست رزرو جبهه {name} ثبت شد و در انتظار تایید است.**")
             
             admin_markup = types.InlineKeyboardMarkup()
             admin_markup.add(types.InlineKeyboardButton("✅ تایید", callback_data=f"admin_approve_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد", callback_data=f"admin_reject_{call.from_user.id}"))
-            bot.send_message(ADMIN_ID, f"📥 **درخواست جدید!**\n👤 کاربر: @{call.from_user.username}\n🌍 جبهه: {name}", reply_markup=admin_markup, parse_mode="Markdown")
+            bot.send_message(ADMIN_ID, f"📥 **درخواست جدید جبهه معمولی!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی عددی: `{call.from_user.id}`\n🌍 جبهه: {name}", reply_markup=admin_markup, parse_mode="Markdown")
     except Exception as e:
         print(f"Error in selection: {e}")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('mil_'))
 def handle_military_click(call):
+    if is_banned(call.from_user.id): return
     country_code = call.data.replace('mil_', '')
     military_text = get_military_info(country_code)
     back_markup = types.InlineKeyboardMarkup()
@@ -240,6 +323,7 @@ def handle_military_click(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_mil_menu")
 def back_to_military_hub(call):
+    if is_banned(call.from_user.id): return
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="⚔️ **فاکشن مورد نظر خود را برای مانیتورینگ انتخاب کنید:**", reply_markup=get_military_menu(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
@@ -251,17 +335,17 @@ def admin_decision(call):
         player = get_player(target_id)
         if player:
             approve_player(target_id)
-            try: bot.send_message(target_id, f"🎉 **درخواست شما تایید شد!**")
+            try: bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} توسط مالک بازی تایید شد! وارد گیم شدید.**")
             except: pass
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"✅ تایید شد.")
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"✅ جبهه کاربر ({player[2]}) با موفقیت تایید و فعال شد.")
     elif action.startswith("reject_"):
         target_id = int(action.replace("reject_", ""))
         player = get_player(target_id)
         if player:
             reject_player(target_id)
-            try: bot.send_message(target_id, f"❌ درخواست شما رد شد.")
+            try: bot.send_message(target_id, f"❌ درخواست شما برای رزرو جبهه رد شد.")
             except: pass
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ رد شد.")
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ درخواست کاربر رد و حذف شد.")
 
 # --- سرور فریب دادن رندر ---
 class DummyWebhookServer(BaseHTTPRequestHandler):
@@ -290,4 +374,3 @@ if __name__ == '__main__':
         bot.infinity_polling(skip_pending=True)
     except Exception as e:
         print(f"❌ CRITICAL BOT POLLING ERROR: {e}")
-    
