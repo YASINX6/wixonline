@@ -1,6 +1,8 @@
 import telebot
 from telebot import types
 import sqlite3
+# اتصال مستقیم به فایلی که در گیت‌هاب ساختی
+from data.military_data import get_military_info
 
 # توکن رسمی ربات شما
 API_TOKEN = '8648815822:AAHso-sAPat6S_P8yVWSBW0cN_0yR0wijkM'
@@ -10,7 +12,7 @@ bot = telebot.TeleBot(API_TOKEN)
 ADMIN_ID = 7961155790
 ADMIN_USERNAME = "EXLUG" 
 
-# --- بخش دیتابیس ---
+# --- بخش دیتابیس کاربری ---
 def init_db():
     conn = sqlite3.connect('wixonline.db')
     cursor = conn.cursor()
@@ -60,7 +62,7 @@ def reject_player(user_id):
     conn.close()
 # ------------------
 
-# پایگاه داده کامل کشورها و گروهک‌ها (بدون کاراکتر زیرخط در کدها)
+# پایگاه داده کامل کشورها و گروهک‌ها جهت رزرو
 GAME_ENTITIES = {
     "europe": {
         "usa": {"name": "🇺🇸 آمریکا", "price": "۲۰۰,۰۰۰ تومان", "vip": True},
@@ -114,6 +116,34 @@ GAME_ENTITIES = {
     }
 }
 
+# تابع ساخت منوی دکمه‌های شیشه‌ای مانیتورینگ نظامی
+def get_military_menu():
+    markup = types.InlineKeyboardMarkup()
+    markup.row(
+        types.InlineKeyboardButton("🇺🇸 آمریکا (VIP)", callback_data="mil_usa"),
+        types.InlineKeyboardButton("🇷🇺 روسیه (VIP)", callback_data="mil_russia")
+    )
+    markup.row(
+        types.InlineKeyboardButton("🇨🇳 چین (VIP)", callback_data="mil_china"),
+        types.InlineKeyboardButton("🇬🇧 بریتانیا (VIP)", callback_data="mil_uk")
+    )
+    markup.row(
+        types.InlineKeyboardButton("🇫🇷 فرانسه (VIP)", callback_data="mil_france"),
+        types.InlineKeyboardButton("🇩🇪 آلمان (VIP)", callback_data="mil_germany")
+    )
+    markup.row(
+        types.InlineKeyboardButton("🇮🇳 هند (VIP)", callback_data="mil_india"),
+        types.InlineKeyboardButton("🇮🇱 اسرائیل (VIP)", callback_data="mil_israel")
+    )
+    markup.row(
+        types.InlineKeyboardButton("🟢 ارتش ایران", callback_data="mil_iran"),
+        types.InlineKeyboardButton("🔴 سپاه پاسداران", callback_data="mil_irgc")
+    )
+    markup.row(
+        types.InlineKeyboardButton("💀 سازمان واگنر", callback_data="mil_wagner")
+    )
+    return markup
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = message.chat.id
@@ -137,7 +167,16 @@ def send_welcome(message):
     markup.add(btn_select)
     bot.send_message(chat_id, welcome_text, reply_markup=markup, parse_mode="Markdown")
 
-# منوی اصلی دسته‌ب بندی‌ها
+# دستور مستقل برای ورود به هاب نظامی اطلاعات تسلیحات
+@bot.message_handler(commands=['military'])
+def send_military_hub(message):
+    welcome_text = (
+        "⚔️ **به سامانه اطلاعات استراتژیک Last Banner خوش آمدید** ⚔️\n\n"
+        "برای مشاهده آخرین وضعیت توزیع تجهیزات، دکترین نظامی و آمار تسلیحاتی فاکشن‌ها و کشورهای جهان، از دکمه‌های زیر استفاده کنید:"
+    )
+    bot.send_message(message.chat.id, welcome_text, reply_markup=get_military_menu(), parse_mode="Markdown")
+
+# منوی اصلی دسته‌ب بندی‌ها برای رزرو جبهه
 @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
 def main_menu(call):
     chat_id = call.message.chat.id
@@ -153,7 +192,7 @@ def main_menu(call):
     
     bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=markup, parse_mode="Markdown")
 
-# نمایش لیست جبهه‌های یک دسته خاص
+# نمایش لیست جبهه‌های یک دسته خاص جهت رزرو
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cat_"))
 def show_category(call):
     chat_id = call.message.chat.id
@@ -181,7 +220,7 @@ def show_category(call):
     
     bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=markup, parse_mode="Markdown")
 
-# پردازش انتخاب نهایی یک جبهه
+# پردازش انتخاب نهایی رزرو جبهه
 @bot.callback_query_handler(func=lambda call: call.data.startswith("select_"))
 def process_selection(call):
     chat_id = call.message.chat.id
@@ -189,7 +228,6 @@ def process_selection(call):
     user_id = call.from_user.id
     username = call.from_user.username or "ندارد"
     
-    # تفکیک دقیق داده با ۲ کاراکتر زیرخط اول
     parts = call.data.split("_", 2)
     category = parts[1]
     entity_code = parts[2]
@@ -239,6 +277,44 @@ def process_selection(call):
         except Exception as e:
             print(f"خطا در ارسال پیام به ادمین: {e}")
 
+# پردازش کلیک روی دکمه‌های مانیتورینگ نظامی (فراخوانی هوشمند از فایل خارجی شما)
+@bot.callback_query_handler(func=lambda call: call.data.startswith('mil_'))
+def handle_military_click(call):
+    country_code = call.data.replace('mil_', '')
+    
+    # فراخوانی امن دیتای متنی از فایل مخزن شما
+    military_text = get_military_info(country_code)
+    
+    back_markup = types.InlineKeyboardMarkup()
+    back_markup.add(types.InlineKeyboardButton("🔙 بازگشت به لیست فاکشن‌ها", callback_data="back_to_mil_menu"))
+    
+    try:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=military_text,
+            reply_markup=back_markup,
+            parse_mode="Markdown"
+        )
+    except Exception:
+        bot.send_message(call.message.chat.id, military_text, reply_markup=back_markup)
+
+# دکمه بازگشت به هاب منوی نظامی
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_mil_menu")
+def back_to_military_hub(call):
+    welcome_text = (
+        "⚔️ **به سامانه اطلاعات استراتژیک Last Banner خوش آمدید** ⚔️\n\n"
+        "فاکشن مورد نظر خود را برای مانیتورینگ انتخاب کنید:"
+    )
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=welcome_text,
+        reply_markup=get_military_menu(),
+        parse_mode="Markdown"
+    )
+
+# پردازش تایید یا رد درخواست‌ها توسط لیدر اصلی بازی
 @bot.callback_query_handler(func=lambda call: call.data.startswith("admin_"))
 def admin_decision(call):
     if call.from_user.id != ADMIN_ID:
