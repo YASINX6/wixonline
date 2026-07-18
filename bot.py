@@ -216,9 +216,29 @@ def send_welcome(message):
         return
         
     player = get_player(message.from_user.id)
+    
+    # اگر بازیکن تایید شده باشد، منوی مدیریت فاکشن با دو دکمه شیشه‌ای باز می‌شود
     if player and player[3] == 'approved':
-        bot.send_message(message.chat.id, f"⚔️ **فرمانده! شما قبلاً عضو شده‌اید:**\n🎭 جبهه شما: **{player[2]}**", parse_mode="Markdown")
+        faction_name = player[2]
+        
+        # پیدا کردن کد مخفی فاکشن برای نمایش دیتای نظامی درست
+        entity_code = "unknown"
+        for cat, entities in GAME_ENTITIES.items():
+            for code, info in entities.items():
+                if info["name"] in faction_name or faction_name in info["name"]:
+                    entity_code = code
+                    break
+
+        welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n🎭 جبهه تحت کنترل شما: **{faction_name}**\n\n👇 جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
+        
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📊 لیست اقتصادی", callback_data="eco_locked"),
+            types.InlineKeyboardButton("🪖 لیست نظامی", callback_data=f"user_mil_{entity_code}")
+        )
+        bot.send_message(message.chat.id, welcome_approved, reply_markup=markup, parse_mode="Markdown")
         return
+        
     elif player and player[3] == 'pending':
         bot.send_message(message.chat.id, f"⏳ **درخواست قبلی شما برای جبهه ({player[2]}) در انتظار تایید است.**")
         return
@@ -305,6 +325,52 @@ def back_to_military_hub(call):
     if is_banned(call.from_user.id): return
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="⚔️ **فاکشن مورد نظر خود را برای مانیتورینگ انتخاب کنید:**", reply_markup=get_military_menu(), parse_mode="Markdown")
 
+# --- بخش جدید: هندلرهای دکمه‌های شیشه‌ای کاربری برای پلیرهای تایید شده ---
+@bot.callback_query_handler(func=lambda call: call.data == "eco_locked")
+def handle_eco_locked(call):
+    bot.answer_callback_query(call.id, "🔒 این بخش در آپدیت‌های آینده فعال می‌شود!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("user_mil_"))
+def handle_user_military(call):
+    if is_banned(call.from_user.id): return
+    entity_code = call.data.replace("user_mil_", "")
+    
+    if entity_code == "unknown":
+        bot.send_message(call.message.chat.id, "❌ خطا در بارگذاری اطلاعات نظامی فاکشن شما.")
+        return
+        
+    military_text = get_military_info(entity_code)
+    
+    back_markup = types.InlineKeyboardMarkup()
+    back_markup.add(types.InlineKeyboardButton("🔙 بازگشت به ستاد فرماندهی", callback_data="back_to_user_menu"))
+    
+    try:
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=military_text, reply_markup=back_markup, parse_mode="Markdown")
+    except:
+        bot.send_message(call.message.chat.id, military_text, reply_markup=back_markup)
+
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_user_menu")
+def back_to_user_menu(call):
+    if is_banned(call.from_user.id): return
+    player = get_player(call.from_user.id)
+    if player:
+        faction_name = player[2]
+        entity_code = "unknown"
+        for cat, entities in GAME_ENTITIES.items():
+            for code, info in entities.items():
+                if info["name"] in faction_name or faction_name in info["name"]:
+                    entity_code = code
+                    break
+                    
+        welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n🎭 جبهه تحت کنترل شما: **{faction_name}**\n\n👇 جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📊 لیست اقتصادی", callback_data="eco_locked"),
+            types.InlineKeyboardButton("🪖 لیست نظامی", callback_data=f"user_mil_{entity_code}")
+        )
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=welcome_approved, reply_markup=markup, parse_mode="Markdown")
+# -------------------------------------------------------------------------
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("adm_"))
 def admin_decision(call):
     if call.from_user.id != ADMIN_ID: return
@@ -314,7 +380,7 @@ def admin_decision(call):
         player = get_player(target_id)
         if player:
             approve_player(target_id)
-            try: bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**")
+            try: bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n👇 همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!")
             except: pass
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"✅ جبهه کاربر ({player[2]}) تایید شد.")
     elif action.startswith("rej_"):
@@ -348,4 +414,4 @@ if __name__ == '__main__':
     
     print("🤖 Velora Game Bot Starting Polling...")
     bot.infinity_polling(skip_pending=True)
-        
+    
