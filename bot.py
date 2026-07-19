@@ -1,6 +1,6 @@
 import telebot
 from telebot import types
-import sqlite3
+import psycopg2
 import sys
 import os
 import threading
@@ -17,20 +17,18 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 if DATA_DIR not in sys.path:
     sys.path.append(DATA_DIR)
 
-print("🔄 Starting Velora Game Bot with Correct Data Path...")
+print("🔄 Starting Velora Game Bot with Cloud Neon Database...")
+
+# لینک دیتابیس ابری دائمی شما
+DB_URL = "postgresql://neondb_owner:npg_jnRUSfz04bNT@ep-lucky-union-avtudu6k.c-11.us-east-1.aws.neon.tech/neondb?sslmode=require"
 
 # فراخوانی اطلاعات نظامی از پوشه data
 def get_military_info(country_code):
     try:
-        # چک کردن وجود فایل در پوشه data
         target_path = os.path.join(DATA_DIR, "military_data.py")
         if os.path.exists(target_path):
-            # امپورت کردن ماژول نظامی از پوشه دیتا
             import military_data
-            # رفرش کردن ماژول برای اعمال تغییرات زنده و آنی شما
             importlib.reload(military_data)
-            
-            # فراخوانی تابع اصلی داخل فایل نظامی
             if hasattr(military_data, "get_military_info"):
                 return military_data.get_military_info(country_code)
             else:
@@ -48,19 +46,20 @@ ADMIN_USERNAME = "EXLUG"
 
 def init_db():
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS players (
-                user_id INTEGER PRIMARY KEY,
+                user_id BIGINT PRIMARY KEY,
                 username TEXT,
                 role TEXT,
                 status TEXT DEFAULT 'pending'
             )
         ''')
         conn.commit()
+        cursor.close()
         conn.close()
-        print("✅ Database initialized successfully.")
+        print("✅ Cloud Database initialized successfully.")
     except Exception as e:
         print(f"❌ DATABASE ERROR: {e}")
 
@@ -68,22 +67,23 @@ init_db()
 
 def get_player(user_id):
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM players WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT * FROM players WHERE user_id = %s", (user_id,))
         player = cursor.fetchone()
+        cursor.close()
         conn.close()
         return player
     except:
         return None
 
 def is_faction_taken(faction_name):
-    """بررسی اینکه آیا جبهه قبلاً توسط شخص دیگری رزرو یا تایید شده است یا خیر"""
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM players WHERE role = ? AND (status = 'approved' OR status = 'pending')", (faction_name,))
+        cursor.execute("SELECT user_id FROM players WHERE role = %s AND (status = 'approved' OR status = 'pending')", (faction_name,))
         result = cursor.fetchone()
+        cursor.close()
         conn.close()
         return result is not None
     except:
@@ -91,36 +91,43 @@ def is_faction_taken(faction_name):
 
 def set_pending_player(user_id, username, role):
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR REPLACE INTO players (user_id, username, role, status)
-            VALUES (?, ?, ?, 'pending')
+            INSERT INTO players (user_id, username, role, status)
+            VALUES (%s, %s, %s, 'pending')
+            ON CONFLICT (user_id) 
+            DO UPDATE SET username = EXCLUDED.username, role = EXCLUDED.role, status = EXCLUDED.status
         ''', (user_id, username, role))
         conn.commit()
+        cursor.close()
         conn.close()
     except Exception as e:
         print(f"❌ DB INSERT ERROR: {e}")
 
 def approve_player(user_id):
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
-        cursor.execute("UPDATE players SET status = 'approved' WHERE user_id = ?", (user_id,))
+        cursor.execute("UPDATE players SET status = 'approved' WHERE user_id = %s", (user_id,))
         conn.commit()
+        cursor.close()
         conn.close()
     except:
         pass
 
 def ban_player(user_id):
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR REPLACE INTO players (user_id, username, role, status)
-            VALUES (?, 'BANNED', 'None', 'banned')
+            INSERT INTO players (user_id, username, role, status)
+            VALUES (%s, 'BANNED', 'None', 'banned')
+            ON CONFLICT (user_id) 
+            DO UPDATE SET username = 'BANNED', role = 'None', status = 'banned'
         ''', (user_id,))
         conn.commit()
+        cursor.close()
         conn.close()
         return True
     except:
@@ -128,10 +135,11 @@ def ban_player(user_id):
 
 def unban_player(user_id):
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM players WHERE user_id = %s", (user_id,))
         conn.commit()
+        cursor.close()
         conn.close()
         return True
     except:
@@ -139,10 +147,11 @@ def unban_player(user_id):
 
 def reject_player(user_id):
     try:
-        conn = sqlite3.connect(os.path.join(BASE_DIR, 'wixonline.db'), timeout=10)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM players WHERE user_id = %s", (user_id,))
         conn.commit()
+        cursor.close()
         conn.close()
     except:
         pass
@@ -243,7 +252,6 @@ def send_welcome(message):
 def main_menu(call):
     if is_banned(call.from_user.id): return
     
-    # اگر کاربر خودش جبهه تایید شده دارد نباید منوی انتخاب باز شود
     player = get_player(call.from_user.id)
     if player and player[3] in ['approved', 'pending']:
         bot.answer_callback_query(call.id, f"❌ شما از قبل جبهه ({player[2]}) را دارید!", show_alert=True)
@@ -281,13 +289,11 @@ def process_selection(call):
         name = entity_info["name"]
         role_name = f"{name} (VIP)" if entity_info["vip"] else name
         
-        # ۱. بررسی اینکه آیا خود کاربر از قبل جبهه فعال یا پندینگ دارد
         current_player = get_player(call.from_user.id)
         if current_player and current_player[3] in ['approved', 'pending']:
             bot.answer_callback_query(call.id, f"❌ شما از قبل جبهه ({current_player[2]}) را رزرو کرده‌اید!", show_alert=True)
             return
 
-        # ۲. بررسی اینکه آیا این فاکشن خاص قبلاً توسط شخص دیگری گرفته شده است یا خیر
         if is_faction_taken(role_name):
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("🔙 بازگشت به لیست", callback_data=f"cat_{category}"))
@@ -404,4 +410,4 @@ if __name__ == '__main__':
     web_thread.start()
     
     bot.infinity_polling(skip_pending=True)
-                
+        
