@@ -6,6 +6,7 @@ import os
 import threading
 import importlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from datetime import datetime  # اضافه شدن کتابخانه زمان برای رسید ادمین
 
 # پیدا کردن مسیر دقیق پوشه جاری ربات در هاست رندر
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -368,26 +369,56 @@ def back_to_user_menu(call):
         )
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=welcome_approved, reply_markup=markup, parse_mode="Markdown")
 
+# 🛠️ بخش بازنویسی‌شده دسیژن ادمین همراه با تولید رسید دیجیتال و مشخصات کامل کاربر
 @bot.callback_query_handler(func=lambda call: call.data.startswith("adm_"))
 def admin_decision(call):
     if call.from_user.id != ADMIN_ID: return
     action = call.data.replace("adm_", "")
+    
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     if action.startswith("app_"):
         target_id = int(action.replace("app_", ""))
         player = get_player(target_id)
         if player:
             approve_player(target_id)
-            try: bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n👇 همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!")
-            except: pass
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"✅ جبهه کاربر ({player[2]}) تایید شد.")
+            try: 
+                bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n👇 همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!", parse_mode="Markdown")
+            except: 
+                pass
+            
+            # فرمت کردن آیدی تلگرام بازیکن جهت تگ شدن صحیح
+            user_mention = f"@{player[1]}" if player[1] != "ندارد" else "ندارد"
+            
+            receipt_text = (
+                f"✅ **کشور با موفقیت تایید و واگذار شد**\n\n"
+                f"🏰 **نام جبهه/کشور:** {player[2]}\n"
+                f"👤 **مالک جبهه:** {user_mention}\n"
+                f"🆔 **آیدی عددی مالک:** `{player[0]}`\n"
+                f"⏰ **زمان تایید نهایی:** {current_time}"
+            )
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=receipt_text, parse_mode="Markdown")
+            
     elif action.startswith("rej_"):
         target_id = int(action.replace("rej_", ""))
         player = get_player(target_id)
         if player:
             reject_player(target_id)
-            try: bot.send_message(target_id, f"❌ درخواست شما رد شد.")
-            except: pass
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=f"❌ درخواست کاربر رد شد.")
+            try: 
+                bot.send_message(target_id, f"❌ درخواست شما رد شد.")
+            except: 
+                pass
+            
+            user_mention = f"@{player[1]}" if player[1] != "ندارد" else "ندارد"
+            
+            receipt_text = (
+                f"❌ **درخواست رزرو جبهه رد شد**\n\n"
+                f"🏰 **نام جبهه/کشور:** {player[2]}\n"
+                f"👤 **متقاضی:** {user_mention}\n"
+                f"🆔 **آیدی عددی متقاضی:** `{player[0]}`\n"
+                f"⏰ **زمان رد درخواست:** {current_time}"
+            )
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=receipt_text, parse_mode="Markdown")
 
 class DummyWebhookServer(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -406,8 +437,4 @@ def run_web_server():
 
 if __name__ == '__main__':
     web_thread = threading.Thread(target=run_web_server)
-    web_thread.daemon = True
-    web_thread.start()
-    
-    bot.infinity_polling(skip_pending=True)
-        
+    web_thread.daemon =
