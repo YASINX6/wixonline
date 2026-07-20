@@ -3,10 +3,9 @@ from telebot import types
 import psycopg2
 import sys
 import os
-import threading
 import importlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from datetime import datetime  # اضافه شدن کتابخانه زمان برای رسید ادمین
+from datetime import datetime
 
 # پیدا کردن مسیر دقیق پوشه جاری ربات در هاست رندر
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +17,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 if DATA_DIR not in sys.path:
     sys.path.append(DATA_DIR)
 
-print("🔄 Starting Velora Game Bot with Cloud Neon Database...")
+print("🔄 Starting Velora Game Bot with Webhook System...")
 
 # لینک دیتابیس ابری دائمی شما
 DB_URL = "postgresql://neondb_owner:npg_jnRUSfz04bNT@ep-lucky-union-avtudu6k.c-11.us-east-1.aws.neon.tech/neondb?sslmode=require"
@@ -369,12 +368,10 @@ def back_to_user_menu(call):
         )
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=welcome_approved, reply_markup=markup, parse_mode="Markdown")
 
-# 🛠️ بخش بازنویسی‌شده دسیژن ادمین همراه با تولید رسید دیجیتال و مشخصات کامل کاربر
 @bot.callback_query_handler(func=lambda call: call.data.startswith("adm_"))
 def admin_decision(call):
     if call.from_user.id != ADMIN_ID: return
     action = call.data.replace("adm_", "")
-    
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     if action.startswith("app_"):
@@ -382,14 +379,10 @@ def admin_decision(call):
         player = get_player(target_id)
         if player:
             approve_player(target_id)
-            try: 
-                bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n👇 همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!", parse_mode="Markdown")
-            except: 
-                pass
+            try: bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n👇 همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!", parse_mode="Markdown")
+            except: pass
             
-            # فرمت کردن آیدی تلگرام بازیکن جهت تگ شدن صحیح
             user_mention = f"@{player[1]}" if player[1] != "ندارد" else "ندارد"
-            
             receipt_text = (
                 f"✅ **کشور با موفقیت تایید و واگذار شد**\n\n"
                 f"🏰 **نام جبهه/کشور:** {player[2]}\n"
@@ -404,13 +397,10 @@ def admin_decision(call):
         player = get_player(target_id)
         if player:
             reject_player(target_id)
-            try: 
-                bot.send_message(target_id, f"❌ درخواست شما رد شد.")
-            except: 
-                pass
+            try: bot.send_message(target_id, f"❌ درخواست شما رد شد.")
+            except: pass
             
             user_mention = f"@{player[1]}" if player[1] != "ندارد" else "ندارد"
-            
             receipt_text = (
                 f"❌ **درخواست رزرو جبهه رد شد**\n\n"
                 f"🏰 **نام جبهه/کشور:** {player[2]}\n"
@@ -420,21 +410,27 @@ def admin_decision(call):
             )
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=receipt_text, parse_mode="Markdown")
 
-class DummyWebhookServer(BaseHTTPRequestHandler):
+# 📡 هندلر اصلی سیستم وب‌هووک
+class WebhookServer(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == f"/{API_TOKEN}":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            update = telebot.types.Update.de_json(post_data)
+            bot.process_new_updates([update])
+            self.send_response(200)
+            self.end_headers()
+        else:
+            self.send_response(403)
+            self.end_headers()
+            
     def do_GET(self):
         self.send_response(200)
-        self.send_header("Content-type", "text/html")
         self.end_headers()
-        self.wfile.write(b"Velora Bot is Live!")
-
-def run_web_server():
-    try:
-        port = int(os.environ.get("PORT", 10000))
-        server = HTTPServer(('0.0.0.0', port), DummyWebhookServer)
-        server.serve_forever()
-    except:
-        pass
+        self.wfile.write(b"Velora Bot Webhook is Active and Running Perfectly!")
 
 if __name__ == '__main__':
-    web_thread = threading.Thread(target=run_web_server)
-    web_thread.daemon =
+    try:
+        # ۱. حذف اتصال‌های قدیمی و پولینگ جهت جلوگیری از تداخل
+        print("🔄 Removing old webhooks...")
+  
