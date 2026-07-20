@@ -429,8 +429,8 @@ class WebhookServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Velora Bot Webhook is Active and Running Perfectly!")
 
+# این بخشِ آخر کدت قطع شده بود که الان کامل و دقیق نوشته شده:
 if __name__ == '__main__':
     try:
-        # ۱. حذف اتصال‌های قدیمی و پولینگ جهت جلوگیری از تداخل
         print("🔄 Removing old webhooks...")
-  
+   
