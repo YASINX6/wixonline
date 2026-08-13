@@ -9,7 +9,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Environment Variables (امن)
+# Environment Variables
 API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 DB_URL = os.getenv('DATABASE_URL')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '7961155790'))
@@ -54,14 +54,28 @@ def init_db():
         cursor.close()
         conn.close()
         print("✅ Database initialized")
+        return True
     except Exception as e:
-        print(f"❌ DB ERROR: {e}")
+        print(f"⚠️ DB init failed: {e}")
+        return False
 
-init_db()
+# اگه دیتابیس موقع استارت وصل نشد، ربات crash نمیکنه
+db_initialized = init_db()
 
-def get_player(user_id):
+def get_db_connection():
+    """اتصال به دیتابیس با retry"""
     try:
         conn = psycopg2.connect(DB_URL)
+        return conn
+    except Exception as e:
+        print(f"️ DB connection failed: {e}")
+        return None
+
+def get_player(user_id):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM players WHERE user_id = %s", (user_id,))
         player = cursor.fetchone()
@@ -72,8 +86,10 @@ def get_player(user_id):
         return None
 
 def is_faction_taken(faction_name):
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT user_id FROM players WHERE role = %s AND (status = 'approved' OR status = 'pending')", (faction_name,))
         result = cursor.fetchone()
@@ -84,8 +100,10 @@ def is_faction_taken(faction_name):
         return False
 
 def set_pending_player(user_id, username, role):
+    conn = get_db_connection()
+    if not conn:
+        return
     try:
-        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO players (user_id, username, role, status)
@@ -100,8 +118,10 @@ def set_pending_player(user_id, username, role):
         print(f"❌ DB INSERT ERROR: {e}")
 
 def approve_player(user_id):
+    conn = get_db_connection()
+    if not conn:
+        return
     try:
-        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute("UPDATE players SET status = 'approved' WHERE user_id = %s", (user_id,))
         conn.commit()
@@ -111,8 +131,10 @@ def approve_player(user_id):
         pass
 
 def ban_player(user_id):
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO players (user_id, username, role, status)
@@ -128,8 +150,10 @@ def ban_player(user_id):
         return False
 
 def unban_player(user_id):
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM players WHERE user_id = %s", (user_id,))
         conn.commit()
@@ -140,8 +164,10 @@ def unban_player(user_id):
         return False
 
 def reject_player(user_id):
+    conn = get_db_connection()
+    if not conn:
+        return
     try:
-        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM players WHERE user_id = %s", (user_id,))
         conn.commit()
@@ -153,15 +179,15 @@ def reject_player(user_id):
 GAME_ENTITIES = {
     "europe": {
         "usa": {"name": "🇺🇸 آمریکا", "price": "۲۰۰,۰۰۰ تومان", "vip": True},
-        "uk": {"name": "🇬🇧 بریتانیا", "price": "۱۰۰,۰۰۰ تومان", "vip": True},
-        "france": {"name": "🇫🇷 فرانسه", "price": "۹۰,۰۰۰ تومان", "vip": True},
-        "germany": {"name": "🇩🇪 آلمان", "price": "۸۵,۰۰۰ تومان", "vip": True},
+        "uk": {"name": "🇧 بریتانیا", "price": "۱۰۰,۰۰ تومان", "vip": True},
+        "france": {"name": "🇫 فرانسه", "price": "۹,۰۰۰ تومان", "vip": True},
+        "germany": {"name": "🇩🇪 آلمان", "price": "۸۵,۰۰ تومان", "vip": True},
         "italy": {"name": "🇮🇹 ایتالیا", "price": None, "vip": False},
         "spain": {"name": "🇪🇸 اسپانیا", "price": None, "vip": False},
         "canada": {"name": "🇨🇦 کانادا", "price": None, "vip": False},
-        "brazil": {"name": "🇧🇷 برزیل", "price": None, "vip": False},
+        "brazil": {"name": "🇷 برزیل", "price": None, "vip": False},
         "poland": {"name": "🇵🇱 لهستان", "price": None, "vip": False},
-        "austria": {"name": "🇦🇹 اتریش", "price": None, "vip": False},
+        "austria": {"name": "🇹 اتریش", "price": None, "vip": False},
         "norway": {"name": "🇳🇴 نروژ", "price": None, "vip": False},
         "sweden": {"name": "🇸🇪 سوئد", "price": None, "vip": False},
         "ukraine": {"name": "🇺🇦 اوکراین", "price": None, "vip": False},
@@ -169,35 +195,35 @@ GAME_ENTITIES = {
         "skorea": {"name": "🇰🇷 کره جنوبی", "price": None, "vip": False},
     },
     "asia": {
-        "russia": {"name": "😈 روسیه", "price": "۱۷۰,۰۰۰ تومان", "vip": True},
-        "china": {"name": "🇨🇳 چین", "price": "۱۵۰,۰۰۰ تومان", "vip": True},
-        "india": {"name": "🇮🇳 هند", "price": "۱۲۰,۰۰۰ تومان", "vip": True},
-        "iran": {"name": "🇮🇷 ایران", "price": "۵۰,۰۰۰ تومان", "vip": True},
-        "israel": {"name": "🇮🇱 اسرائیل", "price": "۵۰,۰۰۰ تومان", "vip": True},
+        "russia": {"name": "😈 روسیه", "price": "۱۷۰,۰۰ تومان", "vip": True},
+        "china": {"name": "🇨🇳 چین", "price": "۱۰,۰۰۰ تومان", "vip": True},
+        "india": {"name": "🇮🇳 هند", "price": "۱۲۰,۰۰ تومان", "vip": True},
+        "iran": {"name": "🇮🇷 ایران", "price": "۵,۰۰۰ تومان", "vip": True},
+        "israel": {"name": "🇮🇱 اسرائیل", "price": "۵۰,۰۰ تومان", "vip": True},
         "afghanistan": {"name": "🇦🇫 افغانستان", "price": None, "vip": False},
-        "iraq": {"name": "🇮🇶 عراق", "price": None, "vip": False},
+        "iraq": {"name": "🇶 عراق", "price": None, "vip": False},
         "lebanon": {"name": "🇱🇧 لبنان", "price": None, "vip": False},
-        "yemen": {"name": "🇾🇪 انصارالله یمن", "price": None, "vip": False},
+        "yemen": {"name": "🇾 انصارالله یمن", "price": None, "vip": False},
         "turkey": {"name": "🇹🇷 ترکیه", "price": None, "vip": False},
-        "saudi": {"name": "🇸🇦 عربستان سعودی", "price": None, "vip": False},
+        "saudi": {"name": "🇸 عربستان سعودی", "price": None, "vip": False},
         "uae": {"name": "🇦🇪 امارات متحده عربی", "price": None, "vip": False},
         "belarus": {"name": "🇧🇾 بلاروس", "price": None, "vip": False},
-        "nkorea": {"name": "🇰🇵 کره شمالی", "price": None, "vip": False},
+        "nkorea": {"name": "🇰 کره شمالی", "price": None, "vip": False},
         "taiwan": {"name": "🇹🇼 تایوان", "price": None, "vip": False},
-        "pakistan": {"name": "🇵🇰 پاکستان", "price": None, "vip": False},
+        "pakistan": {"name": "🇵 پاکستان", "price": None, "vip": False},
     },
     "africa": {
         "libya": {"name": "🇱🇾 لیبی", "price": None, "vip": False},
         "egypt": {"name": "🇪🇬 مصر", "price": None, "vip": False},
-        "nigeria": {"name": "🇳🇬 نیجریه", "price": None, "vip": False},
+        "nigeria": {"name": "🇳 نیجریه", "price": None, "vip": False},
         "morocco": {"name": "🇲🇦 مراکش", "price": None, "vip": False},
     },
     "groups": {
-        "irgc": {"name": "🔴 سپاه پاسداران", "price": "۶۰,۰۰۰ تومان", "vip": True},
-        "wagner": {"name": "💀 گروه واغنر", "price": "۶۰,۰۰۰ تومان", "vip": True},
+        "irgc": {"name": "🔴 سپاه پاسداران", "price": "۶۰,۰۰ تومان", "vip": True},
+        "wagner": {"name": "💀 گروه واغنر", "price": "۶,۰۰۰ تومان", "vip": True},
         "qaeda": {"name": "🏴 القاعده", "price": None, "vip": False},
         "daesh": {"name": "🏴‍☠️ داعش", "price": None, "vip": False},
-        "taliban": {"name": "🪖 طالبان", "price": None, "vip": False},
+        "taliban": {"name": " طالبان", "price": None, "vip": False},
         "hizblebanon": {"name": "💛 حزب‌الله لبنان", "price": None, "vip": False},
         "kurdistan": {"name": "☀️ حزب کردستان", "price": None, "vip": False},
     }
@@ -208,6 +234,20 @@ def is_banned(user_id):
     if player and player[3] == 'banned':
         return True
     return False
+
+@app.route('/', methods=['GET'])
+def home():
+    return "✅ Velora Bot is running on Vercel!"
+
+@app.route(f'/{API_TOKEN}', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return jsonify({"status": "ok"}), 200
+    else:
+        return jsonify({"status": "error"}), 403
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -224,7 +264,7 @@ def send_welcome(message):
                     entity_code = code
                     break
 
-        welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n🎭 جبهه تحت کنترل شما: **{faction_name}**\n\n👇 جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
+        welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n جبهه تحت کنترل شما: **{faction_name}**\n\n👇 جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
             types.InlineKeyboardButton("📊 لیست اقتصادی", callback_data="eco_locked"),
@@ -237,7 +277,7 @@ def send_welcome(message):
         bot.send_message(message.chat.id, f"⏳ **درخواست قبلی شما برای جبهه ({player[2]}) در انتظار تایید است.**")
         return
 
-    welcome_text = "🌍 **به بزرگترین شبیه‌ساز جنگ جهانی سوم خوش آمدید!**\n👇 جبهه خود را انتخاب کنید:"
+    welcome_text = "🌍 **به بزرگترین شبیه‌ساز جنگ جهانی سوم خوش آمدید!**\n جبهه خود را انتخاب کنید:"
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🌍 رزرو کشور یا گروهک", callback_data="main_menu"))
     bot.send_message(message.chat.id, welcome_text, reply_markup=markup, parse_mode="Markdown")
@@ -255,7 +295,7 @@ def main_menu(call):
     markup.add(
         types.InlineKeyboardButton("🏛️ اروپا و آمریکا", callback_data="cat_europe"),
         types.InlineKeyboardButton("🌏 آسیا", callback_data="cat_asia"),
-        types.InlineKeyboardButton("🌍 آفریقا", callback_data="cat_africa"),
+        types.InlineKeyboardButton(" آفریقا", callback_data="cat_africa"),
         types.InlineKeyboardButton("🪖 گروهک‌ها", callback_data="cat_groups")
     )
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="🚩 **منطقه خود را انتخاب کنید:**", reply_markup=markup, parse_mode="Markdown")
@@ -302,14 +342,14 @@ def process_selection(call):
         
         if entity_info["vip"]:
             set_pending_player(call.from_user.id, call.from_user.username or "ندارد", role_name)
-            text = f"💎 **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n⚠️ درخواست ثبت شد. جهت پرداخت به مالک پیام دهید:"
+            text = f" **درخواست رزرو جبهه ویژه (VIP): {name}**\n\n💰 **هزینه رزرو ویژه:** {entity_info['price']}\n\n⚠️ درخواست ثبت شد. جهت پرداخت به مالک پیام دهید:"
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("💬 پیام به مالک", url=f"https://t.me/{ADMIN_USERNAME}"), types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"cat_{category}"))
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text, reply_markup=markup, parse_mode="Markdown")
             
             admin_markup = types.InlineKeyboardMarkup()
             admin_markup.add(types.InlineKeyboardButton("✅ تایید VIP", callback_data=f"adm_app_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد", callback_data=f"adm_rej_{call.from_user.id}"))
-            bot.send_message(ADMIN_ID, f"👑 **درخواست جبهه VIP!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی: `{call.from_user.id}`\n👑 فاکشن: {name}", reply_markup=admin_markup, parse_mode="Markdown")
+            bot.send_message(ADMIN_ID, f" **درخواست جبهه VIP!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی: `{call.from_user.id}`\n👑 فاکشن: {name}", reply_markup=admin_markup, parse_mode="Markdown")
         else:
             set_pending_player(call.from_user.id, call.from_user.username or "ندارد", role_name)
             markup = types.InlineKeyboardMarkup()
@@ -318,7 +358,7 @@ def process_selection(call):
             
             admin_markup = types.InlineKeyboardMarkup()
             admin_markup.add(types.InlineKeyboardButton("✅ تایید", callback_data=f"adm_app_{call.from_user.id}"), types.InlineKeyboardButton("❌ رد", callback_data=f"adm_rej_{call.from_user.id}"))
-            bot.send_message(ADMIN_ID, f"📥 **درخواست جدید جبهه معمولی!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی: `{call.from_user.id}`\n🌍 جبهه: {name}", reply_markup=admin_markup, parse_mode="Markdown")
+            bot.send_message(ADMIN_ID, f"📥 **درخواست جدید جبهه معمولی!**\n👤 کاربر: @{call.from_user.username}\n🆔 آیدی: `{call.from_user.id}`\n جبهه: {name}", reply_markup=admin_markup, parse_mode="Markdown")
     except Exception as e:
         print(f"Error in selection: {e}")
 
@@ -405,20 +445,6 @@ def admin_decision(call):
                 f"⏰ **زمان رد درخواست:** {current_time}"
             )
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=receipt_text, parse_mode="Markdown")
-
-@app.route('/', methods=['GET'])
-def home():
-    return "✅ Velora Bot is running on Vercel!"
-
-@app.route(f'/{API_TOKEN}', methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return jsonify({"status": "ok"}), 200
-    else:
-        return jsonify({"status": "error"}), 403
 
 if __name__ == '__main__':
     app.run(debug=False)
