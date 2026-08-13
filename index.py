@@ -394,7 +394,7 @@ def process_selection(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "eco_locked")
 def handle_eco_locked(call):
-    bot.answer_callback_query(call.id, "🔒 این بخش در آپدیت‌های آینده فعال می‌شود!", show_alert=True)
+    bot.answer_callback_query(call.id, " این بخش در آپدیت‌های آینده فعال می‌شود!", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("user_mil_"))
 def handle_user_military(call):
@@ -428,10 +428,10 @@ def back_to_user_menu(call):
                         entity_code = code
                         break
                         
-            welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n🎭 جبهه تحت کنترل شما: **{faction_name}**\n\n👇 جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
+            welcome_approved = f"⚔️ **فرمانده به ستاد فرماندهی خوش آمدید!**\n🎭 جبهه تحت کنترل شما: **{faction_name}**\n\n جهت مانیتورینگ فاکشن خود از دکمه‌های زیر استفاده کنید:"
             markup = types.InlineKeyboardMarkup(row_width=2)
             markup.add(
-                types.InlineKeyboardButton("📊 لیست اقتصادی", callback_data="eco_locked"),
+                types.InlineKeyboardButton(" لیست اقتصادی", callback_data="eco_locked"),
                 types.InlineKeyboardButton("🪖 لیست نظامی", callback_data=f"user_mil_{entity_code}")
             )
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=welcome_approved, reply_markup=markup, parse_mode="Markdown")
@@ -451,9 +451,40 @@ def admin_decision(call):
             if player:
                 approve_player(target_id)
                 try: 
-                    bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n👇 همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!", parse_mode="Markdown")
+                    bot.send_message(target_id, f"🎉 **درخواست شما برای جبهه {player[2]} تایید شد!**\n\n همین حالا دستور /start را بفرستید تا وارد ستاد فرماندهی خود شوید!", parse_mode="Markdown")
                 except: pass
                 
                 user_mention = f"@{player[1]}" if player[1] != "ندارد" else "ندارد"
                 receipt_text = (
-                    f"✅ **کشور با م
+                    f"✅ **کشور با موفقیت تایید و واگذار شد**\n\n"
+                    f"🏰 **نام جبهه/کشور:** {player[2]}\n"
+                    f"👤 **مالک جبهه:** {user_mention}\n"
+                    f"🆔 **آیدی عددی مالک:** `{player[0]}`\n"
+                    f"⏰ **زمان تایید نهایی:** {current_time}"
+                )
+                bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=receipt_text, parse_mode="Markdown")
+                
+        elif action.startswith("rej_"):
+            target_id = int(action.replace("rej_", ""))
+            player = get_player(target_id)
+            if player:
+                reject_player(target_id)
+                try: 
+                    bot.send_message(target_id, f"❌ درخواست شما رد شد.")
+                except: pass
+                
+                user_mention = f"@{player[1]}" if player[1] != "ندارد" else "ندارد"
+                receipt_text = (
+                    f"❌ **درخواست رزرو جبهه رد شد**\n\n"
+                    f"🏰 **نام جبهه/کشور:** {player[2]}\n"
+                    f"👤 **متقاضی:** {user_mention}\n"
+                    f"🆔 **آیدی عددی متقاضی:** `{player[0]}`\n"
+                    f"⏰ **زمان رد درخواست:** {current_time}"
+                )
+                bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=receipt_text, parse_mode="Markdown")
+    except Exception as e:
+        print(f"❌ admin_decision error: {e}")
+
+if __name__ == '__main__':
+    print("🚀 Starting Flask server...")
+    app.run(debug=False)
